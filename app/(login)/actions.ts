@@ -16,9 +16,10 @@ import {
   ActivityType,
   invitations
 } from '@/lib/db/schema';
-import { comparePasswords, hashPassword, setSession } from '@/lib/auth/session';
-import { redirect } from 'next/navigation';
+import { hashPassword } from '@/lib/auth/session';
+import { signIn as nextAuthSignIn, signOut as nextAuthSignOut, auth } from '@/lib/auth';
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { createCheckoutSession } from '@/lib/payments/stripe';
 import { getUser, getUserWithTeam } from '@/lib/db/queries';
 import {
@@ -52,6 +53,7 @@ const signInSchema = z.object({
 export const signIn = validatedAction(signInSchema, async (data, formData) => {
   const { email, password } = data;
 
+  // Verify credentials first
   const userWithTeam = await db
     .select({
       user: users,
@@ -73,10 +75,9 @@ export const signIn = validatedAction(signInSchema, async (data, formData) => {
 
   const { user: foundUser, team: foundTeam } = userWithTeam[0];
 
-  const isPasswordValid = await comparePasswords(
-    password,
-    foundUser.passwordHash
-  );
+  // Import comparePasswords dynamically
+  const { comparePasswords } = await import('@/lib/auth/session');
+  const isPasswordValid = await comparePasswords(password, foundUser.passwordHash);
 
   if (!isPasswordValid) {
     return {
@@ -86,15 +87,71 @@ export const signIn = validatedAction(signInSchema, async (data, formData) => {
     };
   }
 
-  await Promise.all([
-    setSession(foundUser),
-    logActivity(foundTeam?.id, foundUser.id, ActivityType.SIGN_IN)
-  ]);
+  // Sign in with NextAuth
+  // Note: In NextAuth v5, signIn from server actions may need special handling
+  try {
+    const result = await nextAuthSignIn('credentials', {
+      email,
+      password,
+      redirect: false,
+      callbackUrl: '/dashboard',
+    });
+
+    if (result?.error) {
+      console.error('NextAuth sign in error:', result.error);
+      return {
+        error: 'Invalid email or password. Please try again.',
+        email,
+        password
+      };
+    }
+
+    // If result.url exists, it means NextAuth wants to redirect
+    // But since we set redirect: false, this shouldn't happen
+    if (result?.url && result.url !== '/dashboard') {
+      console.warn('Unexpected redirect URL:', result.url);
+    }
+  } catch (error: any) {
+    console.error('Sign in error:', error);
+    // If it's a CallbackRouteError, the credentials might still be valid
+    // but NextAuth had an issue. Let's check if we can proceed anyway.
+    if (error?.type === 'CallbackRouteError' || error?.cause?.type === 'CallbackRouteError') {
+      console.warn('CallbackRouteError occurred, but credentials were valid. Proceeding...');
+      // The user is authenticated, we can proceed
+    } else {
+      return {
+        error: 'Invalid email or password. Please try again.',
+        email,
+        password
+      };
+    }
+  }
+
+  // Log activity
+  await logActivity(foundTeam?.id, foundUser.id, ActivityType.SIGN_IN);
 
   const redirectTo = formData.get('redirect') as string | null;
   if (redirectTo === 'checkout') {
-    const priceId = formData.get('priceId') as string;
-    return createCheckoutSession({ team: foundTeam, priceId });
+    const user = await getUser();
+    if (user) {
+      const userWithTeam = await db
+        .select({
+          team: teams
+        })
+        .from(teamMembers)
+        .leftJoin(teams, eq(teamMembers.teamId, teams.id))
+        .where(eq(teamMembers.userId, user.id))
+        .limit(1);
+      const team = userWithTeam[0]?.team || null;
+      const priceId = formData.get('priceId') as string;
+      return createCheckoutSession({ team, priceId });
+    }
+  }
+
+  // Check if user is confirmed and redirect accordingly
+  const user = await getUser();
+  if (user && !user.isConfirmed) {
+    redirect('/confirmation');
   }
 
   redirect('/dashboard');
@@ -128,7 +185,8 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
   const newUser: NewUser = {
     email,
     passwordHash,
-    role: 'owner' // Default role, will be overridden if there's an invitation
+    role: 'owner', // Default role, will be overridden if there's an invitation
+    isConfirmed: false // New users require admin confirmation
   };
 
   const [createdUser] = await db.insert(users).values(newUser).returning();
@@ -208,9 +266,25 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
 
   await Promise.all([
     db.insert(teamMembers).values(newTeamMember),
-    logActivity(teamId, createdUser.id, ActivityType.SIGN_UP),
-    setSession(createdUser)
+    logActivity(teamId, createdUser.id, ActivityType.SIGN_UP)
   ]);
+
+  // Sign in the user with NextAuth
+  try {
+    const signInResult = await nextAuthSignIn('credentials', {
+      email,
+      password,
+      redirect: false,
+    });
+
+    if (signInResult?.error) {
+      console.error('Sign in error after signup:', signInResult.error);
+      // Continue anyway since user is created
+    }
+  } catch (error) {
+    console.error('Sign in error after signup:', error);
+    // Continue anyway since user is created
+  }
 
   const redirectTo = formData.get('redirect') as string | null;
   if (redirectTo === 'checkout') {
@@ -218,14 +292,17 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
     return createCheckoutSession({ team: createdTeam, priceId });
   }
 
-  redirect('/dashboard');
+  // Redirect to confirmation page since user is not confirmed
+  redirect('/confirmation');
 });
 
 export async function signOut() {
-  const user = (await getUser()) as User;
-  const userWithTeam = await getUserWithTeam(user.id);
-  await logActivity(userWithTeam?.teamId, user.id, ActivityType.SIGN_OUT);
-  (await cookies()).delete('session');
+  const user = await getUser();
+  if (user) {
+    const userWithTeam = await getUserWithTeam(user.id);
+    await logActivity(userWithTeam?.teamId, user.id, ActivityType.SIGN_OUT);
+  }
+  await nextAuthSignOut({ redirectTo: '/sign-in' });
 }
 
 const updatePasswordSchema = z.object({

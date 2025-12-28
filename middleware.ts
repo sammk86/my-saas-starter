@@ -1,49 +1,34 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { signToken, verifyToken } from '@/lib/auth/session';
+import { auth } from '@/lib/auth';
 
 const protectedRoutes = '/dashboard';
+const confirmationRoute = '/confirmation';
 
-export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const sessionCookie = request.cookies.get('session');
+export default auth((req) => {
+  const { pathname } = req.nextUrl;
   const isProtectedRoute = pathname.startsWith(protectedRoutes);
+  const isConfirmationRoute = pathname === confirmationRoute;
+  const session = req.auth;
 
-  if (isProtectedRoute && !sessionCookie) {
-    return NextResponse.redirect(new URL('/sign-in', request.url));
+  // Redirect to sign-in if accessing protected route without session
+  if (isProtectedRoute && !session) {
+    return NextResponse.redirect(new URL('/sign-in', req.url));
   }
 
-  let res = NextResponse.next();
-
-  if (sessionCookie && request.method === 'GET') {
-    try {
-      const parsed = await verifyToken(sessionCookie.value);
-      const expiresInOneDay = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-      res.cookies.set({
-        name: 'session',
-        value: await signToken({
-          ...parsed,
-          expires: expiresInOneDay.toISOString()
-        }),
-        httpOnly: true,
-        secure: true,
-        sameSite: 'lax',
-        expires: expiresInOneDay
-      });
-    } catch (error) {
-      console.error('Error updating session:', error);
-      res.cookies.delete('session');
-      if (isProtectedRoute) {
-        return NextResponse.redirect(new URL('/sign-in', request.url));
-      }
-    }
+  // Redirect to confirmation page if user is not confirmed
+  if (isProtectedRoute && session && !session.user?.isConfirmed) {
+    return NextResponse.redirect(new URL('/confirmation', req.url));
   }
 
-  return res;
-}
+  // Redirect confirmed users away from confirmation page
+  if (isConfirmationRoute && session?.user?.isConfirmed) {
+    return NextResponse.redirect(new URL('/dashboard', req.url));
+  }
+
+  return NextResponse.next();
+});
 
 export const config = {
   matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
-  runtime: 'nodejs'
 };

@@ -51,6 +51,7 @@ async function seed() {
         email: email,
         passwordHash: passwordHash,
         role: "owner",
+        isConfirmed: true, // Set to true for test user
       },
     ])
     .returning();

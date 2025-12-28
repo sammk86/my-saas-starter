@@ -11,7 +11,8 @@ This is a starter template for building a SaaS application using **Next.js** wit
 - Dashboard pages with CRUD operations on users/teams
 - Basic RBAC with Owner and Member roles
 - Subscription management with Stripe Customer Portal
-- Email/password authentication with JWTs stored to cookies
+- Email/password authentication with NextAuth.js (Auth.js)
+- Account confirmation system with admin approval workflow
 - Global middleware to protect logged-in routes
 - Local middleware to protect Server Actions or validate Zod schemas
 - Activity logging system for any user events
@@ -21,6 +22,7 @@ This is a starter template for building a SaaS application using **Next.js** wit
 - **Framework**: [Next.js](https://nextjs.org/)
 - **Database**: [Postgres](https://www.postgresql.org/)
 - **ORM**: [Drizzle](https://orm.drizzle.team/)
+- **Authentication**: [NextAuth.js v5](https://next-auth.js.org/) (Auth.js)
 - **Payments**: [Stripe](https://stripe.com/)
 - **UI Library**: [shadcn/ui](https://ui.shadcn.com/)
 
@@ -34,7 +36,17 @@ pnpm install
 
 ## Running Locally
 
-[Install](https://docs.stripe.com/stripe-cli) and log in to your Stripe account:
+### Install Stripe CLI
+
+First, install the Stripe CLI. On macOS with Homebrew:
+
+```bash
+brew install stripe/stripe-cli/stripe
+```
+
+For other platforms, see the [Stripe CLI installation guide](https://docs.stripe.com/stripe-cli).
+
+Then log in to your Stripe account:
 
 ```bash
 stripe login
@@ -57,8 +69,9 @@ This will create the following user and team:
 
 - User: `test@test.com`
 - Password: `admin123`
+- Status: Confirmed (can access dashboard immediately)
 
-You can also create new users through the `/sign-up` route.
+You can also create new users through the `/sign-up` route. New users will require admin confirmation before they can access the dashboard portal.
 
 Finally, run the Next.js development server:
 
@@ -73,6 +86,34 @@ You can listen for Stripe webhooks locally through their CLI to handle subscript
 ```bash
 stripe listen --forward-to localhost:3000/api/stripe/webhook
 ```
+
+## Authentication & Account Confirmation
+
+This starter uses NextAuth.js v5 (Auth.js) for authentication with a credentials provider. The authentication system includes:
+
+- **Email/Password Authentication**: Users can sign up and sign in with email and password
+- **Account Confirmation**: New users are created with `isConfirmed: false` and must be approved by an admin before accessing the dashboard
+- **Protected Routes**: Middleware automatically redirects unconfirmed users to the confirmation page
+- **Admin Approval**: Team owners can confirm users via the `/api/admin/confirm-user` endpoint
+
+### User Flow
+
+1. **Sign Up**: New users create an account and are redirected to `/confirmation`
+2. **Pending Confirmation**: Users see a message that their account is awaiting admin approval
+3. **Admin Confirmation**: A team owner calls the admin API to set `isConfirmed: true`
+4. **Access Granted**: Once confirmed, users can access all dashboard features
+
+### Confirming Users (Admin)
+
+To confirm a user programmatically, make a POST request to `/api/admin/confirm-user`:
+
+```bash
+curl -X POST http://localhost:3000/api/admin/confirm-user \
+  -H "Content-Type: application/json" \
+  -d '{"userId": 1}'
+```
+
+Note: Only authenticated users with the `owner` role can confirm other users.
 
 ## Testing Payments
 
