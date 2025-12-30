@@ -1,5 +1,5 @@
 {
-  "id": "261fd993-fb2c-43e7-89d6-cd58786c5f58",
+  "id": "729e78da-b6b8-461b-ba5a-c1b079a5e97c",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -14,8 +14,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "team_id": {
-          "name": "team_id",
+        "organisation_id": {
+          "name": "organisation_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": true
@@ -48,12 +48,12 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "activity_logs_team_id_teams_id_fk": {
-          "name": "activity_logs_team_id_teams_id_fk",
+        "activity_logs_organisation_id_organisations_id_fk": {
+          "name": "activity_logs_organisation_id_organisations_id_fk",
           "tableFrom": "activity_logs",
-          "tableTo": "teams",
+          "tableTo": "organisations",
           "columnsFrom": [
-            "team_id"
+            "organisation_id"
           ],
           "columnsTo": [
             "id"
@@ -76,7 +76,10 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
     "public.invitations": {
       "name": "invitations",
@@ -88,8 +91,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "team_id": {
-          "name": "team_id",
+        "organisation_id": {
+          "name": "organisation_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": true
@@ -129,12 +132,12 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "invitations_team_id_teams_id_fk": {
-          "name": "invitations_team_id_teams_id_fk",
+        "invitations_organisation_id_organisations_id_fk": {
+          "name": "invitations_organisation_id_organisations_id_fk",
           "tableFrom": "invitations",
-          "tableTo": "teams",
+          "tableTo": "organisations",
           "columnsFrom": [
-            "team_id"
+            "organisation_id"
           ],
           "columnsTo": [
             "id"
@@ -157,10 +160,13 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "public.team_members": {
-      "name": "team_members",
+    "public.organisation_members": {
+      "name": "organisation_members",
       "schema": "",
       "columns": {
         "id": {
@@ -175,8 +181,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "team_id": {
-          "name": "team_id",
+        "organisation_id": {
+          "name": "organisation_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": true
@@ -197,9 +203,9 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "team_members_user_id_users_id_fk": {
-          "name": "team_members_user_id_users_id_fk",
-          "tableFrom": "team_members",
+        "organisation_members_user_id_users_id_fk": {
+          "name": "organisation_members_user_id_users_id_fk",
+          "tableFrom": "organisation_members",
           "tableTo": "users",
           "columnsFrom": [
             "user_id"
@@ -210,12 +216,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "team_members_team_id_teams_id_fk": {
-          "name": "team_members_team_id_teams_id_fk",
-          "tableFrom": "team_members",
-          "tableTo": "teams",
+        "organisation_members_organisation_id_organisations_id_fk": {
+          "name": "organisation_members_organisation_id_organisations_id_fk",
+          "tableFrom": "organisation_members",
+          "tableTo": "organisations",
           "columnsFrom": [
-            "team_id"
+            "organisation_id"
           ],
           "columnsTo": [
             "id"
@@ -225,10 +231,13 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "public.teams": {
-      "name": "teams",
+    "public.organisations": {
+      "name": "organisations",
       "schema": "",
       "columns": {
         "id": {
@@ -292,21 +301,24 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "teams_stripe_customer_id_unique": {
-          "name": "teams_stripe_customer_id_unique",
+        "organisations_stripe_customer_id_unique": {
+          "name": "organisations_stripe_customer_id_unique",
           "nullsNotDistinct": false,
           "columns": [
             "stripe_customer_id"
           ]
         },
-        "teams_stripe_subscription_id_unique": {
-          "name": "teams_stripe_subscription_id_unique",
+        "organisations_stripe_subscription_id_unique": {
+          "name": "organisations_stripe_subscription_id_unique",
           "nullsNotDistinct": false,
           "columns": [
             "stripe_subscription_id"
           ]
         }
-      }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
     "public.users": {
       "name": "users",
@@ -343,6 +355,13 @@
           "notNull": true,
           "default": "'member'"
         },
+        "is_confirmed": {
+          "name": "is_confirmed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -375,12 +394,18 @@
             "email"
           ]
         }
-      }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     }
   },
   "enums": {},
   "schemas": {},
   "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
   "_meta": {
     "columns": {},
     "schemas": {},

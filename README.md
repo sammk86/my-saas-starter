@@ -8,7 +8,7 @@ This is a starter template for building a SaaS application using **Next.js** wit
 
 - Marketing landing page (`/`) with animated Terminal element
 - Pricing page (`/pricing`) which connects to Stripe Checkout
-- Dashboard pages with CRUD operations on users/teams
+- Dashboard pages with CRUD operations on users/organisations
 - Basic RBAC with Owner and Member roles
 - Subscription management with Stripe Customer Portal
 - Email/password authentication with NextAuth.js (Auth.js)
@@ -61,14 +61,14 @@ Use the included setup script to create your `.env` file:
 pnpm db:setup
 ```
 
-Run the database migrations and seed the database with a default user and team:
+Run the database migrations and seed the database with a default user and organisation:
 
 ```bash
 pnpm db:migrate
 pnpm db:seed
 ```
 
-This will create the following user and team:
+This will create the following user and organisation:
 
 - User: `test@test.com`
 - Password: `admin123`
@@ -157,7 +157,7 @@ This starter uses NextAuth.js v5 (Auth.js) for authentication with a credentials
 - **Account Confirmation**: New users are created with `isConfirmed: false` and must be confirmed before accessing the dashboard
 - **Protected Routes**: Middleware automatically redirects unconfirmed users to the confirmation page
 - **Email Activation** (optional): Users can activate their account via email link (see Email Setup above)
-- **Admin Approval**: Team owners can confirm users via the `/api/admin/confirm-user` endpoint or directly in the database
+- **Admin Approval**: Organisation owners can confirm users via the `/api/admin/confirm-user` endpoint or directly in the database
 
 ### User Flow
 

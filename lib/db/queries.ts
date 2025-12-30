@@ -1,6 +1,6 @@
 import { desc, and, eq, isNull } from 'drizzle-orm';
 import { db } from './drizzle';
-import { activityLogs, teamMembers, teams, users } from './schema';
+import { activityLogs, organisationMembers, organisations, users } from './schema';
 import { auth } from '@/lib/auth';
 
 export async function getUser() {
@@ -27,18 +27,18 @@ export async function getUser() {
   return user[0];
 }
 
-export async function getTeamByStripeCustomerId(customerId: string) {
+export async function getOrganisationByStripeCustomerId(customerId: string) {
   const result = await db
     .select()
-    .from(teams)
-    .where(eq(teams.stripeCustomerId, customerId))
+    .from(organisations)
+    .where(eq(organisations.stripeCustomerId, customerId))
     .limit(1);
 
   return result.length > 0 ? result[0] : null;
 }
 
-export async function updateTeamSubscription(
-  teamId: number,
+export async function updateOrganisationSubscription(
+  organisationId: number,
   subscriptionData: {
     stripeSubscriptionId: string | null;
     stripeProductId: string | null;
@@ -47,22 +47,22 @@ export async function updateTeamSubscription(
   }
 ) {
   await db
-    .update(teams)
+    .update(organisations)
     .set({
       ...subscriptionData,
       updatedAt: new Date()
     })
-    .where(eq(teams.id, teamId));
+    .where(eq(organisations.id, organisationId));
 }
 
-export async function getUserWithTeam(userId: number) {
+export async function getUserWithOrganisation(userId: number) {
   const result = await db
     .select({
       user: users,
-      teamId: teamMembers.teamId
+      organisationId: organisationMembers.organisationId
     })
     .from(users)
-    .leftJoin(teamMembers, eq(users.id, teamMembers.userId))
+    .leftJoin(organisationMembers, eq(users.id, organisationMembers.userId))
     .where(eq(users.id, userId))
     .limit(1);
 
@@ -90,18 +90,18 @@ export async function getActivityLogs() {
     .limit(10);
 }
 
-export async function getTeamForUser() {
+export async function getOrganisationForUser() {
   const user = await getUser();
   if (!user) {
     return null;
   }
 
-  const result = await db.query.teamMembers.findFirst({
-    where: eq(teamMembers.userId, user.id),
+  const result = await db.query.organisationMembers.findFirst({
+    where: eq(organisationMembers.userId, user.id),
     with: {
-      team: {
+      organisation: {
         with: {
-          teamMembers: {
+          organisationMembers: {
             with: {
               user: {
                 columns: {
@@ -117,5 +117,5 @@ export async function getTeamForUser() {
     }
   });
 
-  return result?.team || null;
+  return result?.organisation || null;
 }

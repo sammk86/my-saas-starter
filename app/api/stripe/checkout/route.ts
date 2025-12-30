@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
-import { users, teams, teamMembers } from '@/lib/db/schema';
+import { users, organisations, organisationMembers } from '@/lib/db/schema';
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/payments/stripe';
 import Stripe from 'stripe';
@@ -63,20 +63,20 @@ export async function GET(request: NextRequest) {
       throw new Error('User not found in database.');
     }
 
-    const userTeam = await db
+    const userOrganisation = await db
       .select({
-        teamId: teamMembers.teamId,
+        organisationId: organisationMembers.organisationId,
       })
-      .from(teamMembers)
-      .where(eq(teamMembers.userId, user[0].id))
+      .from(organisationMembers)
+      .where(eq(organisationMembers.userId, user[0].id))
       .limit(1);
 
-    if (userTeam.length === 0) {
-      throw new Error('User is not associated with any team.');
+    if (userOrganisation.length === 0) {
+      throw new Error('User is not associated with any organisation.');
     }
 
     await db
-      .update(teams)
+      .update(organisations)
       .set({
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscriptionId,
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
         subscriptionStatus: subscription.status,
         updatedAt: new Date(),
       })
-      .where(eq(teams.id, userTeam[0].teamId));
+      .where(eq(organisations.id, userOrganisation[0].organisationId));
 
     return NextResponse.redirect(new URL('/dashboard', request.url));
   } catch (error) {

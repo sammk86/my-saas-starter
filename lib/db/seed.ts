@@ -1,75 +1,127 @@
-import { stripe } from '../payments/stripe';
+import 'dotenv/config';
 import { db } from './drizzle';
-import { users, teams, teamMembers } from './schema';
+import { users, organisations, organisationMembers } from './schema';
 import { hashPassword } from '@/lib/auth/session';
+import { eq } from 'drizzle-orm';
 
 async function createStripeProducts() {
-  console.log('Creating Stripe products and prices...');
+  if (!process.env.STRIPE_SECRET_KEY) {
+    console.log('Skipping Stripe products creation: STRIPE_SECRET_KEY not set');
+    return;
+  }
 
-  const baseProduct = await stripe.products.create({
-    name: 'Base',
-    description: 'Base subscription plan',
-  });
+  try {
+    // Lazy import stripe after env vars are loaded
+    const { stripe } = await import('../payments/stripe');
 
-  await stripe.prices.create({
-    product: baseProduct.id,
-    unit_amount: 800, // $8 in cents
-    currency: 'usd',
-    recurring: {
-      interval: 'month',
-      trial_period_days: 7,
-    },
-  });
+    console.log('Creating Stripe products and prices...');
 
-  const plusProduct = await stripe.products.create({
-    name: 'Plus',
-    description: 'Plus subscription plan',
-  });
+    const baseProduct = await stripe.products.create({
+      name: 'Base',
+      description: 'Base subscription plan',
+    });
 
-  await stripe.prices.create({
-    product: plusProduct.id,
-    unit_amount: 1200, // $12 in cents
-    currency: 'usd',
-    recurring: {
-      interval: 'month',
-      trial_period_days: 7,
-    },
-  });
+    await stripe.prices.create({
+      product: baseProduct.id,
+      unit_amount: 800, // $8 in cents
+      currency: 'usd',
+      recurring: {
+        interval: 'month',
+        trial_period_days: 7,
+      },
+    });
 
-  console.log('Stripe products and prices created successfully.');
+    const plusProduct = await stripe.products.create({
+      name: 'Plus',
+      description: 'Plus subscription plan',
+    });
+
+    await stripe.prices.create({
+      product: plusProduct.id,
+      unit_amount: 1200, // $12 in cents
+      currency: 'usd',
+      recurring: {
+        interval: 'month',
+        trial_period_days: 7,
+      },
+    });
+
+    console.log('Stripe products and prices created successfully.');
+  } catch (error) {
+    console.warn('Failed to create Stripe products:', error instanceof Error ? error.message : 'Unknown error');
+    console.warn('Continuing seed process without Stripe products...');
+  }
 }
 
 async function seed() {
   const email = 'test@test.com';
   const password = 'admin123';
-  const passwordHash = await hashPassword(password);
 
-  const [user] = await db
-    .insert(users)
-    .values([
-      {
-        email: email,
-        passwordHash: passwordHash,
-        role: "owner",
-        isConfirmed: true, // Set to true for test user
-      },
-    ])
-    .returning();
+  // Check if user already exists
+  let existingUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
 
-  console.log('Initial user created.');
+  let user;
+  if (existingUser.length > 0) {
+    user = existingUser[0];
+    console.log('User already exists, using existing user.');
+  } else {
+    const passwordHash = await hashPassword(password);
+    [user] = await db
+      .insert(users)
+      .values([
+        {
+          email: email,
+          passwordHash: passwordHash,
+          role: "owner",
+          isConfirmed: true, // Set to true for test user
+        },
+      ])
+      .returning();
+    console.log('Initial user created.');
+  }
 
-  const [team] = await db
-    .insert(teams)
-    .values({
-      name: 'Test Team',
-    })
-    .returning();
+  // Check if user is already part of an organisation
+  const existingMember = await db
+    .select()
+    .from(organisationMembers)
+    .where(eq(organisationMembers.userId, user.id))
+    .limit(1);
 
-  await db.insert(teamMembers).values({
-    teamId: team.id,
-    userId: user.id,
-    role: 'owner',
-  });
+  if (existingMember.length === 0) {
+    // Check if organisation already exists
+    let existingOrg = await db
+      .select()
+      .from(organisations)
+      .where(eq(organisations.name, 'Test Organisation'))
+      .limit(1);
+
+    let organisation;
+    if (existingOrg.length > 0) {
+      organisation = existingOrg[0];
+      console.log('Organisation already exists, using existing organisation.');
+    } else {
+      [organisation] = await db
+        .insert(organisations)
+        .values({
+          name: 'Test Organisation',
+        })
+        .returning();
+      console.log('Test organisation created.');
+    }
+
+    await db.insert(organisationMembers).values({
+      organisationId: organisation.id,
+      userId: user.id,
+      role: 'owner',
+    });
+    console.log('User added to organisation.');
+  } else {
+    console.log('User is already part of an organisation.');
+  }
 
   await createStripeProducts();
 }

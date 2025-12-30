@@ -1,10 +1,10 @@
 import Stripe from 'stripe';
 import { redirect } from 'next/navigation';
-import { Team } from '@/lib/db/schema';
+import { Organisation } from '@/lib/db/schema';
 import {
-  getTeamByStripeCustomerId,
+  getOrganisationByStripeCustomerId,
   getUser,
-  updateTeamSubscription
+  updateOrganisationSubscription
 } from '@/lib/db/queries';
 
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -12,15 +12,15 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 });
 
 export async function createCheckoutSession({
-  team,
+  organisation,
   priceId
 }: {
-  team: Team | null;
+  organisation: Organisation | null;
   priceId: string;
 }) {
   const user = await getUser();
 
-  if (!team || !user) {
+  if (!organisation || !user) {
     redirect(`/sign-up?redirect=checkout&priceId=${priceId}`);
   }
 
@@ -35,7 +35,7 @@ export async function createCheckoutSession({
     mode: 'subscription',
     success_url: `${process.env.BASE_URL}/api/stripe/checkout?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${process.env.BASE_URL}/pricing`,
-    customer: team.stripeCustomerId || undefined,
+    customer: organisation.stripeCustomerId || undefined,
     client_reference_id: user.id.toString(),
     allow_promotion_codes: true,
     subscription_data: {
@@ -46,8 +46,8 @@ export async function createCheckoutSession({
   redirect(session.url!);
 }
 
-export async function createCustomerPortalSession(team: Team) {
-  if (!team.stripeCustomerId || !team.stripeProductId) {
+export async function createCustomerPortalSession(organisation: Organisation) {
+  if (!organisation.stripeCustomerId || !organisation.stripeProductId) {
     redirect('/pricing');
   }
 
@@ -57,9 +57,9 @@ export async function createCustomerPortalSession(team: Team) {
   if (configurations.data.length > 0) {
     configuration = configurations.data[0];
   } else {
-    const product = await stripe.products.retrieve(team.stripeProductId);
+    const product = await stripe.products.retrieve(organisation.stripeProductId);
     if (!product.active) {
-      throw new Error("Team's product is not active in Stripe");
+      throw new Error("Organisation's product is not active in Stripe");
     }
 
     const prices = await stripe.prices.list({
@@ -67,7 +67,7 @@ export async function createCustomerPortalSession(team: Team) {
       active: true
     });
     if (prices.data.length === 0) {
-      throw new Error("No active prices found for the team's product");
+      throw new Error("No active prices found for the organisation's product");
     }
 
     configuration = await stripe.billingPortal.configurations.create({
@@ -108,7 +108,7 @@ export async function createCustomerPortalSession(team: Team) {
   }
 
   return stripe.billingPortal.sessions.create({
-    customer: team.stripeCustomerId,
+    customer: organisation.stripeCustomerId,
     return_url: `${process.env.BASE_URL}/dashboard`,
     configuration: configuration.id
   });
@@ -121,23 +121,23 @@ export async function handleSubscriptionChange(
   const subscriptionId = subscription.id;
   const status = subscription.status;
 
-  const team = await getTeamByStripeCustomerId(customerId);
+  const organisation = await getOrganisationByStripeCustomerId(customerId);
 
-  if (!team) {
-    console.error('Team not found for Stripe customer:', customerId);
+  if (!organisation) {
+    console.error('Organisation not found for Stripe customer:', customerId);
     return;
   }
 
   if (status === 'active' || status === 'trialing') {
     const plan = subscription.items.data[0]?.plan;
-    await updateTeamSubscription(team.id, {
+    await updateOrganisationSubscription(organisation.id, {
       stripeSubscriptionId: subscriptionId,
       stripeProductId: plan?.product as string,
       planName: (plan?.product as Stripe.Product).name,
       subscriptionStatus: status
     });
   } else if (status === 'canceled' || status === 'unpaid') {
-    await updateTeamSubscription(team.id, {
+    await updateOrganisationSubscription(organisation.id, {
       stripeSubscriptionId: null,
       stripeProductId: null,
       planName: null,

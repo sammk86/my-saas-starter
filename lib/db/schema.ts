@@ -21,7 +21,7 @@ export const users = pgTable('users', {
   deletedAt: timestamp('deleted_at'),
 });
 
-export const teams = pgTable('teams', {
+export const organisations = pgTable('organisations', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 100 }).notNull(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -33,23 +33,23 @@ export const teams = pgTable('teams', {
   subscriptionStatus: varchar('subscription_status', { length: 20 }),
 });
 
-export const teamMembers = pgTable('team_members', {
+export const organisationMembers = pgTable('organisation_members', {
   id: serial('id').primaryKey(),
   userId: integer('user_id')
     .notNull()
     .references(() => users.id),
-  teamId: integer('team_id')
+  organisationId: integer('organisation_id')
     .notNull()
-    .references(() => teams.id),
+    .references(() => organisations.id),
   role: varchar('role', { length: 50 }).notNull(),
   joinedAt: timestamp('joined_at').notNull().defaultNow(),
 });
 
 export const activityLogs = pgTable('activity_logs', {
   id: serial('id').primaryKey(),
-  teamId: integer('team_id')
+  organisationId: integer('organisation_id')
     .notNull()
-    .references(() => teams.id),
+    .references(() => organisations.id),
   userId: integer('user_id').references(() => users.id),
   action: text('action').notNull(),
   timestamp: timestamp('timestamp').notNull().defaultNow(),
@@ -58,9 +58,9 @@ export const activityLogs = pgTable('activity_logs', {
 
 export const invitations = pgTable('invitations', {
   id: serial('id').primaryKey(),
-  teamId: integer('team_id')
+  organisationId: integer('organisation_id')
     .notNull()
-    .references(() => teams.id),
+    .references(() => organisations.id),
   email: varchar('email', { length: 255 }).notNull(),
   role: varchar('role', { length: 50 }).notNull(),
   invitedBy: integer('invited_by')
@@ -70,21 +70,21 @@ export const invitations = pgTable('invitations', {
   status: varchar('status', { length: 20 }).notNull().default('pending'),
 });
 
-export const teamsRelations = relations(teams, ({ many }) => ({
-  teamMembers: many(teamMembers),
+export const organisationsRelations = relations(organisations, ({ many }) => ({
+  organisationMembers: many(organisationMembers),
   activityLogs: many(activityLogs),
   invitations: many(invitations),
 }));
 
 export const usersRelations = relations(users, ({ many }) => ({
-  teamMembers: many(teamMembers),
+  organisationMembers: many(organisationMembers),
   invitationsSent: many(invitations),
 }));
 
 export const invitationsRelations = relations(invitations, ({ one }) => ({
-  team: one(teams, {
-    fields: [invitations.teamId],
-    references: [teams.id],
+  organisation: one(organisations, {
+    fields: [invitations.organisationId],
+    references: [organisations.id],
   }),
   invitedBy: one(users, {
     fields: [invitations.invitedBy],
@@ -92,21 +92,21 @@ export const invitationsRelations = relations(invitations, ({ one }) => ({
   }),
 }));
 
-export const teamMembersRelations = relations(teamMembers, ({ one }) => ({
+export const organisationMembersRelations = relations(organisationMembers, ({ one }) => ({
   user: one(users, {
-    fields: [teamMembers.userId],
+    fields: [organisationMembers.userId],
     references: [users.id],
   }),
-  team: one(teams, {
-    fields: [teamMembers.teamId],
-    references: [teams.id],
+  organisation: one(organisations, {
+    fields: [organisationMembers.organisationId],
+    references: [organisations.id],
   }),
 }));
 
 export const activityLogsRelations = relations(activityLogs, ({ one }) => ({
-  team: one(teams, {
-    fields: [activityLogs.teamId],
-    references: [teams.id],
+  organisation: one(organisations, {
+    fields: [activityLogs.organisationId],
+    references: [organisations.id],
   }),
   user: one(users, {
     fields: [activityLogs.userId],
@@ -116,16 +116,16 @@ export const activityLogsRelations = relations(activityLogs, ({ one }) => ({
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
-export type Team = typeof teams.$inferSelect;
-export type NewTeam = typeof teams.$inferInsert;
-export type TeamMember = typeof teamMembers.$inferSelect;
-export type NewTeamMember = typeof teamMembers.$inferInsert;
+export type Organisation = typeof organisations.$inferSelect;
+export type NewOrganisation = typeof organisations.$inferInsert;
+export type OrganisationMember = typeof organisationMembers.$inferSelect;
+export type NewOrganisationMember = typeof organisationMembers.$inferInsert;
 export type ActivityLog = typeof activityLogs.$inferSelect;
 export type NewActivityLog = typeof activityLogs.$inferInsert;
 export type Invitation = typeof invitations.$inferSelect;
 export type NewInvitation = typeof invitations.$inferInsert;
-export type TeamDataWithMembers = Team & {
-  teamMembers: (TeamMember & {
+export type OrganisationDataWithMembers = Organisation & {
+  organisationMembers: (OrganisationMember & {
     user: Pick<User, 'id' | 'name' | 'email'>;
   })[];
 };
@@ -137,8 +137,8 @@ export enum ActivityType {
   UPDATE_PASSWORD = 'UPDATE_PASSWORD',
   DELETE_ACCOUNT = 'DELETE_ACCOUNT',
   UPDATE_ACCOUNT = 'UPDATE_ACCOUNT',
-  CREATE_TEAM = 'CREATE_TEAM',
-  REMOVE_TEAM_MEMBER = 'REMOVE_TEAM_MEMBER',
-  INVITE_TEAM_MEMBER = 'INVITE_TEAM_MEMBER',
+  CREATE_ORGANISATION = 'CREATE_ORGANISATION',
+  REMOVE_ORGANISATION_MEMBER = 'REMOVE_ORGANISATION_MEMBER',
+  INVITE_ORGANISATION_MEMBER = 'INVITE_ORGANISATION_MEMBER',
   ACCEPT_INVITATION = 'ACCEPT_INVITATION',
 }

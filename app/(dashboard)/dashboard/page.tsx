@@ -11,8 +11,8 @@ import {
 } from '@/components/ui/card';
 import { customerPortalAction } from '@/lib/payments/actions';
 import { useActionState } from 'react';
-import { TeamDataWithMembers, User } from '@/lib/db/schema';
-import { removeTeamMember, inviteTeamMember } from '@/app/(login)/actions';
+import { OrganisationDataWithMembers, User } from '@/lib/db/schema';
+import { removeOrganisationMember, inviteOrganisationMember } from '@/app/(login)/actions';
 import useSWR from 'swr';
 import { Suspense } from 'react';
 import { Input } from '@/components/ui/input';
@@ -31,31 +31,31 @@ function SubscriptionSkeleton() {
   return (
     <Card className="mb-8 h-[140px]">
       <CardHeader>
-        <CardTitle>Team Subscription</CardTitle>
+        <CardTitle>Organisation Subscription</CardTitle>
       </CardHeader>
     </Card>
   );
 }
 
 function ManageSubscription() {
-  const { data: teamData } = useSWR<TeamDataWithMembers>('/api/team', fetcher);
+  const { data: organisationData } = useSWR<OrganisationDataWithMembers>('/api/organisation', fetcher);
 
   return (
     <Card className="mb-8">
       <CardHeader>
-        <CardTitle>Team Subscription</CardTitle>
+        <CardTitle>Organisation Subscription</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
             <div className="mb-4 sm:mb-0">
               <p className="font-medium">
-                Current Plan: {teamData?.planName || 'Free'}
+                Current Plan: {organisationData?.planName || 'Free'}
               </p>
               <p className="text-sm text-muted-foreground">
-                {teamData?.subscriptionStatus === 'active'
+                {organisationData?.subscriptionStatus === 'active'
                   ? 'Billed monthly'
-                  : teamData?.subscriptionStatus === 'trialing'
+                  : organisationData?.subscriptionStatus === 'trialing'
                   ? 'Trial period'
                   : 'No active subscription'}
               </p>
@@ -72,11 +72,11 @@ function ManageSubscription() {
   );
 }
 
-function TeamMembersSkeleton() {
+function OrganisationMembersSkeleton() {
   return (
     <Card className="mb-8 h-[140px]">
       <CardHeader>
-        <CardTitle>Team Members</CardTitle>
+        <CardTitle>Organisation Members</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="animate-pulse space-y-4 mt-1">
@@ -93,25 +93,25 @@ function TeamMembersSkeleton() {
   );
 }
 
-function TeamMembers() {
-  const { data: teamData } = useSWR<TeamDataWithMembers>('/api/team', fetcher);
+function OrganisationMembers() {
+  const { data: organisationData } = useSWR<OrganisationDataWithMembers>('/api/organisation', fetcher);
   const [removeState, removeAction, isRemovePending] = useActionState<
     ActionState,
     FormData
-  >(removeTeamMember, {});
+  >(removeOrganisationMember, {});
 
   const getUserDisplayName = (user: Pick<User, 'id' | 'name' | 'email'>) => {
     return user.name || user.email || 'Unknown User';
   };
 
-  if (!teamData?.teamMembers?.length) {
+  if (!organisationData?.organisationMembers?.length) {
     return (
       <Card className="mb-8">
         <CardHeader>
-          <CardTitle>Team Members</CardTitle>
+          <CardTitle>Organisation Members</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">No team members yet.</p>
+          <p className="text-muted-foreground">No organisation members yet.</p>
         </CardContent>
       </Card>
     );
@@ -120,11 +120,11 @@ function TeamMembers() {
   return (
     <Card className="mb-8">
       <CardHeader>
-        <CardTitle>Team Members</CardTitle>
+        <CardTitle>Organisation Members</CardTitle>
       </CardHeader>
       <CardContent>
         <ul className="space-y-4">
-          {teamData.teamMembers.map((member, index) => (
+          {organisationData.organisationMembers.map((member, index) => (
             <li key={member.id} className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <Avatar>
@@ -177,28 +177,28 @@ function TeamMembers() {
   );
 }
 
-function InviteTeamMemberSkeleton() {
+function InviteOrganisationMemberSkeleton() {
   return (
     <Card className="h-[260px]">
       <CardHeader>
-        <CardTitle>Invite Team Member</CardTitle>
+        <CardTitle>Invite Organisation Member</CardTitle>
       </CardHeader>
     </Card>
   );
 }
 
-function InviteTeamMember() {
+function InviteOrganisationMember() {
   const { data: user } = useSWR<User>('/api/user', fetcher);
   const isOwner = user?.role === 'owner';
   const [inviteState, inviteAction, isInvitePending] = useActionState<
     ActionState,
     FormData
-  >(inviteTeamMember, {});
+  >(inviteOrganisationMember, {});
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Invite Team Member</CardTitle>
+        <CardTitle>Invite Organisation Member</CardTitle>
       </CardHeader>
       <CardContent>
         <form action={inviteAction} className="space-y-4">
@@ -261,7 +261,7 @@ function InviteTeamMember() {
       {!isOwner && (
         <CardFooter>
           <p className="text-sm text-muted-foreground">
-            You must be a team owner to invite new members.
+            You must be an organisation owner to invite new members.
           </p>
         </CardFooter>
       )}
@@ -272,15 +272,15 @@ function InviteTeamMember() {
 export default function SettingsPage() {
   return (
     <section className="flex-1 p-4 lg:p-8">
-      <h1 className="text-lg lg:text-2xl font-medium mb-6">Team Settings</h1>
+      <h1 className="text-lg lg:text-2xl font-medium mb-6">Organisation Settings</h1>
       <Suspense fallback={<SubscriptionSkeleton />}>
         <ManageSubscription />
       </Suspense>
-      <Suspense fallback={<TeamMembersSkeleton />}>
-        <TeamMembers />
+      <Suspense fallback={<OrganisationMembersSkeleton />}>
+        <OrganisationMembers />
       </Suspense>
-      <Suspense fallback={<InviteTeamMemberSkeleton />}>
-        <InviteTeamMember />
+      <Suspense fallback={<InviteOrganisationMemberSkeleton />}>
+        <InviteOrganisationMember />
       </Suspense>
     </section>
   );
