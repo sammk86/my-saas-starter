@@ -202,13 +202,47 @@ async function main() {
   const BASE_URL = 'http://localhost:3000';
   const AUTH_SECRET = generateAuthSecret();
 
-  await writeEnvFile({
+  // Optional: Resend email configuration
+  console.log('\nStep 7: Optional - Email Configuration (Resend)');
+  const setupEmail = await question(
+    'Do you want to set up email functionality with Resend? (y/n): '
+  );
+
+  let RESEND_API_KEY = '';
+  let RESEND_ENABLED = 'false';
+  let RESEND_FROM_EMAIL = '';
+  let CONTACT_EMAIL = '';
+
+  if (setupEmail.toLowerCase() === 'y') {
+    console.log(
+      'You can get your Resend API key at: https://resend.com/api-keys'
+    );
+    RESEND_API_KEY = await question('Enter your Resend API Key: ');
+    RESEND_ENABLED = 'true';
+    RESEND_FROM_EMAIL = await question(
+      'Enter the email address to send from (e.g., noreply@yourdomain.com): '
+    );
+    CONTACT_EMAIL = await question(
+      'Enter the email address to receive contact form submissions: '
+    );
+  }
+
+  const envVars: Record<string, string> = {
     POSTGRES_URL,
     STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET,
     BASE_URL,
     AUTH_SECRET,
-  });
+  };
+
+  if (RESEND_ENABLED === 'true') {
+    envVars.RESEND_API_KEY = RESEND_API_KEY;
+    envVars.RESEND_ENABLED = RESEND_ENABLED;
+    envVars.RESEND_FROM_EMAIL = RESEND_FROM_EMAIL;
+    envVars.CONTACT_EMAIL = CONTACT_EMAIL;
+  }
+
+  await writeEnvFile(envVars);
 
   console.log('🎉 Setup completed successfully!');
 }

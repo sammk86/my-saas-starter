@@ -15,9 +15,11 @@ export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
   const redirect = searchParams.get('redirect');
   const priceId = searchParams.get('priceId');
   const inviteId = searchParams.get('inviteId');
+  const activated = searchParams.get('activated');
+  const errorParam = searchParams.get('error');
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
     mode === 'signin' ? signIn : signUp,
-    { error: '' }
+    { error: errorParam === 'invalid_token' ? 'Invalid or expired activation link.' : '' }
   );
 
   return (
@@ -85,6 +87,11 @@ export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
             </div>
           </div>
 
+          {activated === 'true' && (
+            <div className="text-green-600 text-sm bg-green-50 border border-green-200 rounded-md p-3">
+              Your account has been activated successfully! You can now sign in.
+            </div>
+          )}
           {state?.error && (
             <div className="text-red-500 text-sm">{state.error}</div>
           )}

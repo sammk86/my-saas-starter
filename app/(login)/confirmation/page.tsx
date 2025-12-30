@@ -1,8 +1,11 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { CircleIcon } from 'lucide-react';
+import { isEmailEnabled } from '@/lib/email/resend';
 
-export default function ConfirmationPage() {
+export default async function ConfirmationPage() {
+  const emailEnabled = await isEmailEnabled();
+
   return (
     <div className="min-h-[100dvh] flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gray-50">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
@@ -13,7 +16,9 @@ export default function ConfirmationPage() {
           Account Pending Confirmation
         </h2>
         <p className="mt-2 text-center text-sm text-gray-600">
-          Your account is awaiting admin approval
+          {emailEnabled
+            ? 'Please check your email to activate your account'
+            : 'Your account is awaiting admin approval'}
         </p>
       </div>
 
@@ -21,12 +26,21 @@ export default function ConfirmationPage() {
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           <div className="space-y-4">
             <p className="text-sm text-gray-700">
-              Thank you for signing up! Your account has been created successfully,
-              but it requires admin confirmation before you can access the portal.
+              Thank you for signing up! Your account has been created successfully.
             </p>
             <p className="text-sm text-gray-700">
-              An administrator will review your account and confirm it shortly. Once
-              confirmed, you'll be able to access all features of the platform.
+              {emailEnabled ? (
+                <>
+                  Please check your email and click the activation link to confirm your account.
+                  Once activated, you'll be able to access all features of the platform.
+                </>
+              ) : (
+                <>
+                  Your account requires admin confirmation before you can access the portal.
+                  An administrator will review your account and confirm it shortly. Once
+                  confirmed, you'll be able to access all features of the platform.
+                </>
+              )}
             </p>
             <p className="text-sm text-gray-700">
               If you have any questions or need assistance, please contact support.

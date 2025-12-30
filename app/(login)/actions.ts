@@ -269,6 +269,18 @@ export const signUp = validatedAction(signUpSchema, async (data, formData) => {
     logActivity(teamId, createdUser.id, ActivityType.SIGN_UP)
   ]);
 
+  // Send activation email if enabled
+  const { isEmailEnabled, generateActivationToken, sendActivationEmail } = await import('@/lib/email/resend');
+  if (await isEmailEnabled()) {
+    try {
+      const activationToken = await generateActivationToken(createdUser.id, createdUser.email);
+      await sendActivationEmail(createdUser.email, activationToken);
+    } catch (error) {
+      console.error('Error sending activation email:', error);
+      // Continue even if email fails
+    }
+  }
+
   // Sign in the user with NextAuth
   try {
     const signInResult = await nextAuthSignIn('credentials', {
