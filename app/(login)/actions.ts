@@ -767,3 +767,42 @@ export const inviteOrganisationMember = validatedActionWithUser(
     }
   }
 );
+
+const updateOrganisationNameSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100, 'Name must be less than 100 characters')
+});
+
+export const updateOrganisationName = validatedActionWithUser(
+  updateOrganisationNameSchema,
+  async (data, _, user) => {
+    const { name } = data;
+
+    // Check that the user is an organization owner
+    if (user.role !== 'owner') {
+      return { error: 'Only organisation owners can update the organisation name' };
+    }
+
+    const userWithOrganisation = await getUserWithOrganisation(user.id);
+
+    if (!userWithOrganisation?.organisationId) {
+      return { error: 'User is not part of an organisation' };
+    }
+
+    // Update the organisation name
+    await db
+      .update(organisations)
+      .set({
+        name,
+        updatedAt: new Date()
+      })
+      .where(eq(organisations.id, userWithOrganisation.organisationId));
+
+    await logActivity(
+      userWithOrganisation.organisationId,
+      user.id,
+      ActivityType.UPDATE_ACCOUNT
+    );
+
+    return { success: 'Organisation name updated successfully', name };
+  }
+);

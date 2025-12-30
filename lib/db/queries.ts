@@ -129,3 +129,19 @@ export async function getOrganisationForUser() {
 
   return result?.organisation || null;
 }
+
+export async function getUserOrganisationRole() {
+  const user = await getUser();
+  if (!user) {
+    return null;
+  }
+
+  const result = await db.query.organisationMembers.findFirst({
+    where: eq(organisationMembers.userId, user.id),
+    columns: {
+      role: true
+    }
+  });
+
+  return result?.role || null;
+}
