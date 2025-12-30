@@ -1,6 +1,6 @@
 import { desc, and, eq, isNull } from 'drizzle-orm';
 import { db } from './drizzle';
-import { activityLogs, organisationMembers, organisations, users } from './schema';
+import { activityLogs, organisationMembers, organisations, users, invitations } from './schema';
 import { auth } from '@/lib/auth';
 
 export async function getUser() {
@@ -110,6 +110,16 @@ export async function getOrganisationForUser() {
                   email: true
                 }
               }
+            }
+          },
+          invitations: {
+            where: eq(invitations.status, 'pending'),
+            columns: {
+              id: true,
+              email: true,
+              role: true,
+              invitedAt: true,
+              status: true
             }
           }
         }

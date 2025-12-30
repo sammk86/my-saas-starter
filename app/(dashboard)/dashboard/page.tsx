@@ -12,9 +12,9 @@ import {
 import { customerPortalAction } from '@/lib/payments/actions';
 import { useActionState } from 'react';
 import { OrganisationDataWithMembers, User } from '@/lib/db/schema';
-import { removeOrganisationMember, inviteOrganisationMember } from '@/app/(login)/actions';
+import { removeOrganisationMember, inviteOrganisationMember, cancelInvitation } from '@/app/(login)/actions';
 import useSWR from 'swr';
-import { Suspense } from 'react';
+import { Suspense, useEffect, useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
@@ -94,17 +94,32 @@ function OrganisationMembersSkeleton() {
 }
 
 function OrganisationMembers() {
-  const { data: organisationData } = useSWR<OrganisationDataWithMembers>('/api/organisation', fetcher);
+  const { data: organisationData, mutate: mutateOrganisation } = useSWR<OrganisationDataWithMembers>('/api/organisation', fetcher);
   const [removeState, removeAction, isRemovePending] = useActionState<
     ActionState,
     FormData
   >(removeOrganisationMember, {});
+  const [cancelState, cancelAction, isCancelPending] = useActionState<
+    ActionState,
+    FormData
+  >(cancelInvitation, {});
+
+  // Refresh organisation data when member is removed or invitation is cancelled
+  useEffect(() => {
+    if ((removeState?.success || cancelState?.success) && !isRemovePending && !isCancelPending) {
+      mutateOrganisation();
+    }
+  }, [removeState?.success, cancelState?.success, isRemovePending, isCancelPending, mutateOrganisation]);
 
   const getUserDisplayName = (user: Pick<User, 'id' | 'name' | 'email'>) => {
     return user.name || user.email || 'Unknown User';
   };
 
-  if (!organisationData?.organisationMembers?.length) {
+  const activeMembers = organisationData?.organisationMembers || [];
+  const pendingInvitations = organisationData?.invitations || [];
+  const hasAnyMembers = activeMembers.length > 0 || pendingInvitations.length > 0;
+
+  if (!hasAnyMembers) {
     return (
       <Card className="mb-8">
         <CardHeader>
@@ -124,19 +139,10 @@ function OrganisationMembers() {
       </CardHeader>
       <CardContent>
         <ul className="space-y-4">
-          {organisationData.organisationMembers.map((member, index) => (
+          {activeMembers.map((member, index) => (
             <li key={member.id} className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <Avatar>
-                  {/* 
-                    This app doesn't save profile images, but here
-                    is how you'd show them:
-
-                    <AvatarImage
-                      src={member.user.image || ''}
-                      alt={getUserDisplayName(member.user)}
-                    />
-                  */}
                   <AvatarFallback>
                     {getUserDisplayName(member.user)
                       .split(' ')
@@ -149,7 +155,7 @@ function OrganisationMembers() {
                     {getUserDisplayName(member.user)}
                   </p>
                   <p className="text-sm text-muted-foreground capitalize">
-                    {member.role}
+                    {member.role} • Active
                   </p>
                 </div>
               </div>
@@ -168,9 +174,50 @@ function OrganisationMembers() {
               ) : null}
             </li>
           ))}
+          {pendingInvitations.map((invitation) => (
+            <li key={`invitation-${invitation.id}`} className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <Avatar>
+                  <AvatarFallback>
+                    {invitation.email
+                      .split(' ')
+                      .map((n) => n[0])
+                      .join('')
+                      .toUpperCase()
+                      .slice(0, 2)}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-medium">
+                    {invitation.email}
+                  </p>
+                  <p className="text-sm text-muted-foreground capitalize">
+                    {invitation.role} • <span className="text-yellow-600">Pending</span>
+                  </p>
+                </div>
+              </div>
+              <form action={cancelAction}>
+                <input type="hidden" name="invitationId" value={invitation.id} />
+                <Button
+                  type="submit"
+                  variant="outline"
+                  size="sm"
+                  disabled={isCancelPending}
+                >
+                  {isCancelPending ? 'Cancelling...' : 'Cancel'}
+                </Button>
+              </form>
+            </li>
+          ))}
         </ul>
         {removeState?.error && (
           <p className="text-red-500 mt-4">{removeState.error}</p>
+        )}
+        {cancelState?.error && (
+          <p className="text-red-500 mt-4">{cancelState.error}</p>
+        )}
+        {cancelState?.success && (
+          <p className="text-green-500 mt-4">{cancelState.success}</p>
         )}
       </CardContent>
     </Card>
@@ -189,11 +236,25 @@ function InviteOrganisationMemberSkeleton() {
 
 function InviteOrganisationMember() {
   const { data: user } = useSWR<User>('/api/user', fetcher);
+  const { mutate: mutateOrganisation } = useSWR<OrganisationDataWithMembers>('/api/organisation', fetcher);
   const isOwner = user?.role === 'owner';
   const [inviteState, inviteAction, isInvitePending] = useActionState<
     ActionState,
     FormData
   >(inviteOrganisationMember, {});
+  const hasRefreshed = useRef(false);
+
+  // Refresh organisation data when invitation is successful
+  useEffect(() => {
+    if (inviteState?.success && !isInvitePending && !hasRefreshed.current) {
+      hasRefreshed.current = true;
+      mutateOrganisation();
+      // Reset after a delay to allow future refreshes
+      setTimeout(() => {
+        hasRefreshed.current = false;
+      }, 1000);
+    }
+  }, [inviteState?.success, isInvitePending, mutateOrganisation]);
 
   return (
     <Card>

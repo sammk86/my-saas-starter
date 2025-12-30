@@ -128,6 +128,7 @@ export type OrganisationDataWithMembers = Organisation & {
   organisationMembers: (OrganisationMember & {
     user: Pick<User, 'id' | 'name' | 'email'>;
   })[];
+  invitations?: Pick<Invitation, 'id' | 'email' | 'role' | 'invitedAt' | 'status'>[];
 };
 
 export enum ActivityType {

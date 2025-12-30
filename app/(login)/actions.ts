@@ -47,11 +47,12 @@ async function logActivity(
 
 const signInSchema = z.object({
   email: z.string().email().min(3).max(255),
-  password: z.string().min(8).max(100)
+  password: z.string().min(8).max(100),
+  inviteId: z.string().optional()
 });
 
 export const signIn = validatedAction(signInSchema, async (data, formData) => {
-  const { email, password } = data;
+  const { email, password, inviteId } = data;
 
   // Verify credentials first
   const userWithOrganisation = await db
@@ -129,6 +130,58 @@ export const signIn = validatedAction(signInSchema, async (data, formData) => {
 
   // Log activity
   await logActivity(foundOrganisation?.id, foundUser.id, ActivityType.SIGN_IN);
+
+  // Handle invitation acceptance if inviteId is provided
+  if (inviteId) {
+    // Validate invitation exists, is pending, and email matches
+    const [invitation] = await db
+      .select()
+      .from(invitations)
+      .where(
+        and(
+          eq(invitations.id, parseInt(inviteId)),
+          eq(invitations.email, email),
+          eq(invitations.status, 'pending')
+        )
+      )
+      .limit(1);
+
+    if (invitation) {
+      // Check if user is already a member of this organisation
+      const existingMember = await db
+        .select()
+        .from(organisationMembers)
+        .where(
+          and(
+            eq(organisationMembers.userId, foundUser.id),
+            eq(organisationMembers.organisationId, invitation.organisationId)
+          )
+        )
+        .limit(1);
+
+      if (existingMember.length === 0) {
+        // Add user to organisation with specified role
+        await db.insert(organisationMembers).values({
+          userId: foundUser.id,
+          organisationId: invitation.organisationId,
+          role: invitation.role
+        });
+
+        // Update invitation status to 'accepted'
+        await db
+          .update(invitations)
+          .set({ status: 'accepted' })
+          .where(eq(invitations.id, invitation.id));
+
+        // Log activity
+        await logActivity(
+          invitation.organisationId,
+          foundUser.id,
+          ActivityType.ACCEPT_INVITATION
+        );
+      }
+    }
+  }
 
   const redirectTo = formData.get('redirect') as string | null;
   if (redirectTo === 'checkout') {
@@ -480,6 +533,118 @@ export const removeOrganisationMember = validatedActionWithUser(
   }
 );
 
+const cancelInvitationSchema = z.object({
+  invitationId: z.string().transform((val) => parseInt(val, 10))
+});
+
+export const cancelInvitation = validatedActionWithUser(
+  cancelInvitationSchema,
+  async (data, _, user) => {
+    const { invitationId } = data;
+    const userWithOrganisation = await getUserWithOrganisation(user.id);
+
+    if (!userWithOrganisation?.organisationId) {
+      return { error: 'User is not part of an organisation' };
+    }
+
+    // Verify the invitation belongs to the user's organisation
+    const [invitation] = await db
+      .select()
+      .from(invitations)
+      .where(
+        and(
+          eq(invitations.id, invitationId),
+          eq(invitations.organisationId, userWithOrganisation.organisationId),
+          eq(invitations.status, 'pending')
+        )
+      )
+      .limit(1);
+
+    if (!invitation) {
+      return { error: 'Invitation not found or already processed' };
+    }
+
+    // Delete the invitation
+    await db
+      .delete(invitations)
+      .where(eq(invitations.id, invitationId));
+
+    await logActivity(
+      userWithOrganisation.organisationId,
+      user.id,
+      ActivityType.REMOVE_ORGANISATION_MEMBER
+    );
+
+    return { success: 'Invitation cancelled successfully' };
+  }
+);
+
+const acceptInvitationSchema = z.object({
+  inviteId: z.string()
+});
+
+export const acceptInvitation = validatedActionWithUser(
+  acceptInvitationSchema,
+  async (data, _, user) => {
+    const { inviteId } = data;
+
+    // Validate invitation exists, is pending, and email matches current user
+    const [invitation] = await db
+      .select()
+      .from(invitations)
+      .where(
+        and(
+          eq(invitations.id, parseInt(inviteId)),
+          eq(invitations.email, user.email),
+          eq(invitations.status, 'pending')
+        )
+      )
+      .limit(1);
+
+    if (!invitation) {
+      return { error: 'Invalid or expired invitation.' };
+    }
+
+    // Check if user is already a member of this organisation
+    const existingMember = await db
+      .select()
+      .from(organisationMembers)
+      .where(
+        and(
+          eq(organisationMembers.userId, user.id),
+          eq(organisationMembers.organisationId, invitation.organisationId)
+        )
+      )
+      .limit(1);
+
+    if (existingMember.length > 0) {
+      return { error: 'You are already a member of this organisation.' };
+    }
+
+    // Add user to organisation with specified role
+    await db.insert(organisationMembers).values({
+      userId: user.id,
+      organisationId: invitation.organisationId,
+      role: invitation.role
+    });
+
+    // Update invitation status to 'accepted'
+    await db
+      .update(invitations)
+      .set({ status: 'accepted' })
+      .where(eq(invitations.id, invitation.id));
+
+    // Log activity
+    await logActivity(
+      invitation.organisationId,
+      user.id,
+      ActivityType.ACCEPT_INVITATION
+    );
+
+    return { success: 'Invitation accepted successfully' };
+  }
+);
+
 const inviteOrganisationMemberSchema = z.object({
   email: z.string().email('Invalid email address'),
   role: z.enum(['member', 'owner'])
@@ -526,13 +691,17 @@ export const inviteOrganisationMember = validatedActionWithUser(
     }
 
     // Create a new invitation
-    await db.insert(invitations).values({
+    const [createdInvitation] = await db.insert(invitations).values({
       organisationId: userWithOrganisation.organisationId,
       email,
       role,
       invitedBy: user.id,
       status: 'pending'
-    });
+    }).returning();
+
+    if (!createdInvitation) {
+      return { error: 'Failed to create invitation. Please try again.' };
+    }
 
     await logActivity(
       userWithOrganisation.organisationId,
@@ -540,9 +709,61 @@ export const inviteOrganisationMember = validatedActionWithUser(
       ActivityType.INVITE_ORGANISATION_MEMBER
     );
 
-    // TODO: Send invitation email and include ?inviteId={id} to sign-up URL
-    // await sendInvitationEmail(email, userWithOrganisation.organisation.name, role)
+    // Fetch organisation name for email
+    const [organisation] = await db
+      .select()
+      .from(organisations)
+      .where(eq(organisations.id, userWithOrganisation.organisationId))
+      .limit(1);
 
-    return { success: 'Invitation sent successfully' };
+    // Send invitation email
+    let emailSent = false;
+    let emailError: string | null = null;
+    
+    try {
+      const { sendInvitationEmail, isEmailEnabled } = await import('@/lib/email/resend');
+      const emailEnabled = await isEmailEnabled();
+      
+      console.log('Email enabled check:', emailEnabled);
+      console.log('RESEND_ENABLED:', process.env.RESEND_ENABLED);
+      console.log('RESEND_API_KEY exists:', !!process.env.RESEND_API_KEY);
+      
+      if (emailEnabled) {
+        console.log('Attempting to send invitation email to:', email);
+        emailSent = await sendInvitationEmail(
+          email,
+          organisation?.name || 'the organisation',
+          role,
+          createdInvitation.id,
+          user.name || undefined
+        );
+        
+        console.log('Email send result:', emailSent);
+        
+        if (!emailSent) {
+          emailError = 'Email sending failed. Please verify RESEND_API_KEY and RESEND_ENABLED settings.';
+          console.error('Failed to send invitation email. Check Resend configuration.');
+        }
+      } else {
+        emailError = 'Email is not enabled. Set RESEND_ENABLED=true and configure RESEND_API_KEY in your environment variables.';
+        console.warn('Email is not enabled. Invitation created but no email sent.');
+        console.warn('Current env vars - RESEND_ENABLED:', process.env.RESEND_ENABLED, 'RESEND_API_KEY:', process.env.RESEND_API_KEY ? 'Set' : 'Not set');
+      }
+    } catch (error) {
+      emailError = `Email error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      console.error('Error sending invitation email:', error);
+      if (error instanceof Error) {
+        console.error('Error stack:', error.stack);
+      }
+    }
+
+    // Always return success since invitation was created, but include email status
+    if (emailSent) {
+      return { success: 'Invitation sent successfully' };
+    } else {
+      return { 
+        success: `Invitation created successfully. ${emailError || 'Email could not be sent.'}`
+      };
+    }
   }
 );
