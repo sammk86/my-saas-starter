@@ -1,12 +1,15 @@
 import { checkoutAction } from '@/lib/payments/actions';
 import { Check } from 'lucide-react';
-import { getStripePrices, getStripeProducts } from '@/lib/payments/stripe';
+import { getStripePrices, getStripeProducts, isStripeEnabled } from '@/lib/payments/stripe';
 import { SubmitButton } from './submit-button';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
 // Prices are fresh for one hour max
 export const revalidate = 3600;
 
 export default async function PricingPage() {
+  const stripeEnabled = isStripeEnabled();
   const [prices, products] = await Promise.all([
     getStripePrices(),
     getStripeProducts(),
@@ -44,6 +47,7 @@ export default async function PricingPage() {
             '24/7 Support + Slack Access',
           ]}
           priceId={plusPrice?.id}
+          stripeEnabled={stripeEnabled}
         />
       </div>
     </main>
@@ -57,6 +61,7 @@ function PricingCard({
   trialDays,
   features,
   priceId,
+  stripeEnabled = true,
 }: {
   name: string;
   price: number;
@@ -64,7 +69,10 @@ function PricingCard({
   trialDays: number;
   features: string[];
   priceId?: string;
+  stripeEnabled?: boolean;
 }) {
+  const isPlus = name === 'Plus';
+
   return (
     <div className="pt-6">
       <h2 className="text-2xl font-medium text-gray-900 mb-2">{name}</h2>
@@ -85,10 +93,21 @@ function PricingCard({
           </li>
         ))}
       </ul>
-      <form action={checkoutAction}>
-        <input type="hidden" name="priceId" value={priceId} />
-        <SubmitButton />
-      </form>
+      {isPlus && !stripeEnabled ? (
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600 text-center">
+            Contact us to get pricing or become a Plus member
+          </p>
+          <Button asChild className="w-full rounded-full" variant="outline">
+            <Link href="/contact">Contact Us</Link>
+          </Button>
+        </div>
+      ) : (
+        <form action={checkoutAction}>
+          <input type="hidden" name="priceId" value={priceId} />
+          <SubmitButton />
+        </form>
+      )}
     </div>
   );
 }

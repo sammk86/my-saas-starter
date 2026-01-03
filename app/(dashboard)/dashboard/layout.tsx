@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Users, Settings, Shield, Activity, Menu, LayoutDashboard } from 'lucide-react';
+import { Settings, Menu, LayoutDashboard } from 'lucide-react';
 import useSWR from 'swr';
 import { User } from '@/lib/db/schema';
 
@@ -18,15 +18,10 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const { data: user } = useSWR<User>('/api/user', fetcher);
-  const { data: roleData } = useSWR<{ role: string | null }>('/api/user-organisation-role', fetcher);
-  const isOwner = roleData?.role === 'owner';
 
   const navItems = [
     { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    ...(isOwner ? [{ href: '/dashboard/organisation', icon: Users, label: 'Organisation' }] : []),
-    { href: '/dashboard/general', icon: Settings, label: 'General' },
-    { href: '/dashboard/activity', icon: Activity, label: 'Activity' },
-    { href: '/dashboard/security', icon: Shield, label: 'Security' }
+    { href: '/dashboard/settings', icon: Settings, label: 'Settings' }
   ];
 
   return (

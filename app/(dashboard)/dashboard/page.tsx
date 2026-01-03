@@ -14,10 +14,10 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground mb-4">
-              Dashboard coming soon. For now, manage your organisation settings.
+              Dashboard coming soon. For now, manage your settings.
             </p>
             <Button asChild className="bg-orange-500 hover:bg-orange-600 text-white">
-              <Link href="/organisation">Go to Organisation Settings</Link>
+              <Link href="/dashboard/settings">Go to Settings</Link>
             </Button>
           </CardContent>
         </Card>

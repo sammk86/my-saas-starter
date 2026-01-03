@@ -2,10 +2,14 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { users, organisations, organisationMembers } from '@/lib/db/schema';
 import { NextRequest, NextResponse } from 'next/server';
-import { stripe } from '@/lib/payments/stripe';
+import { isStripeEnabled, getStripeClient } from '@/lib/payments/stripe';
 import Stripe from 'stripe';
 
 export async function GET(request: NextRequest) {
+  if (!isStripeEnabled()) {
+    return NextResponse.redirect(new URL('/pricing', request.url));
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const sessionId = searchParams.get('session_id');
 
@@ -14,7 +18,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+    const session = await getStripeClient().checkout.sessions.retrieve(sessionId, {
       expand: ['customer', 'subscription'],
     });
 
@@ -32,7 +36,7 @@ export async function GET(request: NextRequest) {
       throw new Error('No subscription found for this session.');
     }
 
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+    const subscription = await getStripeClient().subscriptions.retrieve(subscriptionId, {
       expand: ['items.data.price.product'],
     });
 

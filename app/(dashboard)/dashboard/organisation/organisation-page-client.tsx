@@ -491,8 +491,7 @@ function InviteOrganisationMember() {
 
 export default function OrganisationPageClient() {
   return (
-    <section className="flex-1 p-4 lg:p-8">
-      <h1 className="text-lg lg:text-2xl font-medium mb-6">Organisation Settings</h1>
+    <div>
       <Suspense fallback={<div className="mb-8 h-[140px] bg-gray-100 rounded animate-pulse" />}>
         <OrganisationNameEditor />
       </Suspense>
@@ -505,7 +504,7 @@ export default function OrganisationPageClient() {
       <Suspense fallback={<InviteOrganisationMemberSkeleton />}>
         <InviteOrganisationMember />
       </Suspense>
-    </section>
+    </div>
   );
 }
 

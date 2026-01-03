@@ -7,17 +7,18 @@ This is a starter template for building a SaaS application using **Next.js** wit
 ## Features
 
 - Marketing landing page (`/`) with animated Terminal element
-- Pricing page (`/pricing`) which connects to Stripe Checkout
-- Dashboard pages with CRUD operations on users/organisations
+- Pricing page (`/pricing`) with Stripe Checkout integration (optional via feature flag)
+- Settings page with tabs for General, Organisation, Activity, and Security
 - Basic RBAC with Owner and Member roles
-- Subscription management with Stripe Customer Portal
+- Subscription management with Stripe Customer Portal (optional via feature flag)
 - Email/password authentication with NextAuth.js (Auth.js)
 - Account confirmation system with admin approval workflow
-- Email activation via Resend (optional) - users receive activation emails on signup
+- Email activation via Resend (optional via feature flag) - users receive activation emails on signup
 - Contact form with email notifications
 - Global middleware to protect logged-in routes
 - Local middleware to protect Server Actions or validate Zod schemas
 - Activity logging system for any user events
+- Feature flags for Stripe and Resend to enable/disable services
 
 ## Tech Stack
 
@@ -25,8 +26,8 @@ This is a starter template for building a SaaS application using **Next.js** wit
 - **Database**: [Postgres](https://www.postgresql.org/)
 - **ORM**: [Drizzle](https://orm.drizzle.team/)
 - **Authentication**: [NextAuth.js v5](https://next-auth.js.org/) (Auth.js)
-- **Payments**: [Stripe](https://stripe.com/)
-- **Email**: [Resend](https://resend.com/) (optional)
+- **Payments**: [Stripe](https://stripe.com/) (optional via feature flag)
+- **Email**: [Resend](https://resend.com/) (optional via feature flag)
 - **UI Library**: [shadcn/ui](https://ui.shadcn.com/)
 
 ## Getting Started
@@ -90,9 +91,38 @@ You can listen for Stripe webhooks locally through their CLI to handle subscript
 stripe listen --forward-to localhost:3000/api/stripe/webhook
 ```
 
+## Feature Flags
+
+This starter includes feature flags to enable/disable Stripe and Resend services. This allows the application to operate without these services when disabled.
+
+### Stripe Feature Flag (`STRIPE_ENABLED`)
+
+When `STRIPE_ENABLED=false` (default):
+- Stripe checkout is disabled
+- Plus plan users see a "Contact Us" message instead of checkout button
+- Customer portal access is blocked
+- Pricing page gracefully handles missing Stripe data
+
+When `STRIPE_ENABLED=true`:
+- Full Stripe integration is enabled
+- Users can subscribe via Stripe Checkout
+- Customer portal is available for subscription management
+
+### Resend Feature Flag (`RESEND_ENABLED`)
+
+When `RESEND_ENABLED=false` (default):
+- Activation emails are not sent
+- Confirmation page shows "awaiting admin approval" message
+- Admins must confirm users via `/api/admin/confirm-user` endpoint or database
+
+When `RESEND_ENABLED=true`:
+- Activation emails are sent to new users
+- Users can activate their account via email link
+- Contact form emails are enabled
+
 ## Email Setup (Resend) - Optional
 
-This starter includes optional email functionality powered by [Resend](https://resend.com/). Email features are **disabled by default** and must be explicitly enabled.
+This starter includes optional email functionality powered by [Resend](https://resend.com/). Email features are **disabled by default** and must be explicitly enabled via the `RESEND_ENABLED` feature flag.
 
 ### Features
 
@@ -210,17 +240,23 @@ When you're ready to deploy your SaaS application to production, follow these st
 
 In your Vercel project settings (or during deployment), add all the necessary environment variables. Make sure to update the values for the production environment, including:
 
+**Required**:
 1. `BASE_URL`: Set this to your production domain.
-2. `STRIPE_SECRET_KEY`: Use your Stripe secret key for the production environment.
-3. `STRIPE_WEBHOOK_SECRET`: Use the webhook secret from the production webhook you created in step 1.
-4. `POSTGRES_URL`: Set this to your production database URL.
-5. `AUTH_SECRET`: Set this to a random string. `openssl rand -base64 32` will generate one.
+2. `POSTGRES_URL`: Set this to your production database URL.
+3. `AUTH_SECRET`: Set this to a random string. `openssl rand -base64 32` will generate one.
 
-**Optional - Email (Resend)**:
-6. `RESEND_API_KEY`: Your Resend API key (if using email features)
+**Stripe (Optional - controlled by feature flag)**:
+4. `STRIPE_ENABLED`: Set to `true` to enable Stripe payment processing
+5. `STRIPE_SECRET_KEY`: Use your Stripe secret key for the production environment (required if `STRIPE_ENABLED=true`)
+6. `STRIPE_WEBHOOK_SECRET`: Use the webhook secret from the production webhook you created in step 1 (required if `STRIPE_ENABLED=true`)
+
+**Email/Resend (Optional - controlled by feature flag)**:
 7. `RESEND_ENABLED`: Set to `true` to enable email features
-8. `RESEND_FROM_EMAIL`: Verified email address to send from
-9. `CONTACT_EMAIL`: Email address to receive contact form submissions
+8. `RESEND_API_KEY`: Your Resend API key (required if `RESEND_ENABLED=true`)
+9. `RESEND_FROM_EMAIL`: Verified email address to send from (required if `RESEND_ENABLED=true`)
+10. `CONTACT_EMAIL`: Email address to receive contact form submissions (required if `RESEND_ENABLED=true`)
+
+**Note**: See the `.env.example` file for a complete list of all environment variables.
 
 ## Other Templates
 

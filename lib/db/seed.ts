@@ -5,23 +5,23 @@ import { hashPassword } from '@/lib/auth/session';
 import { eq } from 'drizzle-orm';
 
 async function createStripeProducts() {
-  if (!process.env.STRIPE_SECRET_KEY) {
-    console.log('Skipping Stripe products creation: STRIPE_SECRET_KEY not set');
-    return;
-  }
-
   try {
     // Lazy import stripe after env vars are loaded
-    const { stripe } = await import('../payments/stripe');
+    const { isStripeEnabled, getStripeClient } = await import('../payments/stripe');
+
+    if (!isStripeEnabled()) {
+      console.log('Skipping Stripe products creation: Stripe is not enabled (STRIPE_ENABLED is not true or STRIPE_SECRET_KEY not set)');
+      return;
+    }
 
     console.log('Creating Stripe products and prices...');
 
-    const baseProduct = await stripe.products.create({
+    const baseProduct = await getStripeClient().products.create({
       name: 'Base',
       description: 'Base subscription plan',
     });
 
-    await stripe.prices.create({
+    await getStripeClient().prices.create({
       product: baseProduct.id,
       unit_amount: 800, // $8 in cents
       currency: 'usd',
@@ -31,12 +31,12 @@ async function createStripeProducts() {
       },
     });
 
-    const plusProduct = await stripe.products.create({
+    const plusProduct = await getStripeClient().products.create({
       name: 'Plus',
       description: 'Plus subscription plan',
     });
 
-    await stripe.prices.create({
+    await getStripeClient().prices.create({
       product: plusProduct.id,
       unit_amount: 1200, // $12 in cents
       currency: 'usd',

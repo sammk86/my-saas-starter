@@ -7,8 +7,33 @@ import {
   updateOrganisationSubscription
 } from '@/lib/db/queries';
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-04-30.basil'
+const stripeEnabled = process.env.STRIPE_ENABLED === 'true';
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+
+let stripeClient: Stripe | null = null;
+
+export function isStripeEnabled(): boolean {
+  return stripeEnabled && !!stripeSecretKey;
+}
+
+function getStripeClient(): Stripe {
+  if (!isStripeEnabled()) {
+    throw new Error('Stripe is not enabled. Please set STRIPE_ENABLED=true and STRIPE_SECRET_KEY in your environment variables.');
+  }
+
+  if (!stripeClient) {
+    stripeClient = new Stripe(stripeSecretKey!, {
+      apiVersion: '2025-04-30.basil'
+    });
+  }
+
+  return stripeClient;
+}
+
+export const stripe = new Proxy({} as Stripe, {
+  get(_target, prop) {
+    return getStripeClient()[prop as keyof Stripe];
+  }
 });
 
 export async function createCheckoutSession({
@@ -18,13 +43,17 @@ export async function createCheckoutSession({
   organisation: Organisation | null;
   priceId: string;
 }) {
+  if (!isStripeEnabled()) {
+    redirect('/contact?message=pricing');
+  }
+
   const user = await getUser();
 
   if (!organisation || !user) {
     redirect(`/sign-up?redirect=checkout&priceId=${priceId}`);
   }
 
-  const session = await stripe.checkout.sessions.create({
+  const session = await getStripeClient().checkout.sessions.create({
     payment_method_types: ['card'],
     line_items: [
       {
@@ -47,22 +76,26 @@ export async function createCheckoutSession({
 }
 
 export async function createCustomerPortalSession(organisation: Organisation) {
+  if (!isStripeEnabled()) {
+    redirect('/contact?message=subscription');
+  }
+
   if (!organisation.stripeCustomerId || !organisation.stripeProductId) {
     redirect('/pricing');
   }
 
   let configuration: Stripe.BillingPortal.Configuration;
-  const configurations = await stripe.billingPortal.configurations.list();
+  const configurations = await getStripeClient().billingPortal.configurations.list();
 
   if (configurations.data.length > 0) {
     configuration = configurations.data[0];
   } else {
-    const product = await stripe.products.retrieve(organisation.stripeProductId);
+    const product = await getStripeClient().products.retrieve(organisation.stripeProductId);
     if (!product.active) {
       throw new Error("Organisation's product is not active in Stripe");
     }
 
-    const prices = await stripe.prices.list({
+    const prices = await getStripeClient().prices.list({
       product: product.id,
       active: true
     });
@@ -70,7 +103,7 @@ export async function createCustomerPortalSession(organisation: Organisation) {
       throw new Error("No active prices found for the organisation's product");
     }
 
-    configuration = await stripe.billingPortal.configurations.create({
+    configuration = await getStripeClient().billingPortal.configurations.create({
       business_profile: {
         headline: 'Manage your subscription'
       },
@@ -107,7 +140,7 @@ export async function createCustomerPortalSession(organisation: Organisation) {
     });
   }
 
-  return stripe.billingPortal.sessions.create({
+  return getStripeClient().billingPortal.sessions.create({
     customer: organisation.stripeCustomerId,
     return_url: `${process.env.BASE_URL}/dashboard`,
     configuration: configuration.id
@@ -117,6 +150,11 @@ export async function createCustomerPortalSession(organisation: Organisation) {
 export async function handleSubscriptionChange(
   subscription: Stripe.Subscription
 ) {
+  if (!isStripeEnabled()) {
+    console.warn('Stripe webhook received but Stripe is disabled');
+    return;
+  }
+
   const customerId = subscription.customer as string;
   const subscriptionId = subscription.id;
   const status = subscription.status;
@@ -147,7 +185,11 @@ export async function handleSubscriptionChange(
 }
 
 export async function getStripePrices() {
-  const prices = await stripe.prices.list({
+  if (!isStripeEnabled()) {
+    return [];
+  }
+
+  const prices = await getStripeClient().prices.list({
     expand: ['data.product'],
     active: true,
     type: 'recurring'
@@ -165,7 +207,11 @@ export async function getStripePrices() {
 }
 
 export async function getStripeProducts() {
-  const products = await stripe.products.list({
+  if (!isStripeEnabled()) {
+    return [];
+  }
+
+  const products = await getStripeClient().products.list({
     active: true,
     expand: ['data.default_price']
   });

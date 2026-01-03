@@ -1,17 +1,22 @@
 import Stripe from 'stripe';
-import { handleSubscriptionChange, stripe } from '@/lib/payments/stripe';
+import { handleSubscriptionChange, isStripeEnabled, getStripeClient } from '@/lib/payments/stripe';
 import { NextRequest, NextResponse } from 'next/server';
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
 export async function POST(request: NextRequest) {
+  if (!isStripeEnabled()) {
+    console.warn('Stripe webhook received but Stripe is disabled. Webhook will be ignored.');
+    return NextResponse.json({ received: true, message: 'Stripe is disabled' });
+  }
+
   const payload = await request.text();
   const signature = request.headers.get('stripe-signature') as string;
 
   let event: Stripe.Event;
 
   try {
-    event = stripe.webhooks.constructEvent(payload, signature, webhookSecret);
+    event = getStripeClient().webhooks.constructEvent(payload, signature, webhookSecret);
   } catch (err) {
     console.error('Webhook signature verification failed.', err);
     return NextResponse.json(

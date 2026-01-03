@@ -229,6 +229,7 @@ async function main() {
 
   const envVars: Record<string, string> = {
     POSTGRES_URL,
+    STRIPE_ENABLED: 'true',
     STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET,
     BASE_URL,
